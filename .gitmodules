@@ -1,0 +1,3 @@
+[submodule "src"]
+	path = ESOAssistant
+	url = https://github.com/3bagorion33/ESOAssistantSource.git

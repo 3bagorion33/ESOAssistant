@@ -1,0 +1,129 @@
+name: Public Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    permissions: write-all
+    runs-on: windows-2019
+    name: Build Visual Studio Project (aiproj)
+    steps:
+      - name: Update env
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+            $commitUrl = "https://api.github.com/repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA"
+            $headers = @{
+                "Accept" = "application/vnd.github+json"
+                "Authorization" = "Bearer $env:GITHUB_TOKEN"
+                "User-Agent" = "GitHub Actions"
+                "X-GitHub-Api-Version" = "2022-11-28"
+            }
+            $response = Invoke-RestMethod -Uri $commitUrl -Headers $headers
+            $comment = $response[0].commit.message
+            echo "TAG=$env:GITHUB_REF_NAME" | Out-File -FilePath $env:GITHUB_ENV -Append
+            echo "COMMENT<<EOF" | Out-File -FilePath $env:GITHUB_ENV -Append
+            echo "$comment" | Out-File -FilePath $env:GITHUB_ENV -Append
+            echo "EOF" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+#      - name: Check out repository code
+#        uses: actions/checkout@v3
+#        with:
+#         submodules: recursive
+#         repository: ${{ github.ACTOR }}/ESOAssistantSource
+#         token: ${{ secrets.GH_PAT }} # `GH_PAT` is a secret that contains your PAT
+#         path: ESOAssistantSource
+#         fetch-tags: true
+#
+#      - name: Setup MSBuild
+#        uses: microsoft/setup-msbuild@v1.1
+#
+#      - name: Setup NuGet
+#        uses: NuGet/setup-nuget@v1.0.5
+#        
+#      - name: Deploy Advinst
+#        uses: caphyon/advinst-github-action@v1.0
+#        with:
+#          advinst-version: '20.9.1'
+#          advinst-license: ${{ secrets.ADVINST_LICENSE_KEY }}
+#
+#      - name: Deploy SmartAssembly
+#        run: |
+#            nuget install RedGate.SmartAssembly.Installer /OutputDirectory ${{ github.workspace }}
+#            $saExtractPath = "${{ github.workspace }}\RedGate.SmartAssembly.Installer*\tools\"
+#            $saInstallLocation = "${{ github.workspace }}\tools\SA\"
+#            $msiPath = (Get-ChildItem "$saExtractPath\SmartAssembly_*_x64.msi").FullName
+#            Start-Process -FilePath msiexec -Args "/qn /i `"$msiPath`" INSTALLDIR=`"$saInstallLocation`""
+#
+#      - name: Restore Packages
+#        run: nuget restore ${{ github.workspace }}\ESOAssistantSource\ESOAssistant.sln
+#
+#      - name: Build app for release
+#        run: |
+#            msbuild /p:Configuration=Release ${{ github.workspace }}\ESOAssistantSource\ESOAssistantLite\ESOAssistantLite.csproj
+#            msbuild ${{ github.workspace }}\ESOAssistantSource\ESOAssistantLiteSetup\ESOAssistantLiteSetup.aiproj
+#            
+#      - name: Archive Debug Symbols
+#        working-directory: ${{ github.workspace }}\ESOAssistantSource\ESOAssistantLite\bin\Release\
+#        run: Compress-Archive -Path "*.pdb" -DestinationPath "${{ github.workspace }}\Debug.zip"
+#            
+      - name: Download Assets
+        shell: PowerShell
+        run: |
+            Invoke-WebRequest -Uri https://github.com/$env:GITHUB_ACTOR/ESOAQR/releases/latest/download/ESOAQR.zip -OutFile ESOAQR.zip
+            Invoke-WebRequest -Uri https://github.com/$env:GITHUB_ACTOR/FishingStateMachine/releases/latest/download/FishingStateMachine.zip -OutFile FishingStateMachine.zip
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.TAG }}
+          release_name: "ESO Assistant Lite ${{ env.TAG }}"
+          body: ${{ env.COMMENT }}
+          draft: false
+          prerelease: false
+#
+#      - name: Upload Release Asset
+#        uses: actions/upload-release-asset@v1
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        with:
+#          upload_url: ${{ steps.create_release.outputs.upload_url }}
+#          asset_path: ${{ github.workspace }}\ESOAssistantSource\ESOAssistantLiteSetup\ESOAssistantLiteSetup-SetupFiles\ESOAssistantLiteSetup.msi
+#          asset_name: ESOAssistantLiteSetup.msi
+#          asset_content_type: application/x-msi
+#          
+#      - name: Upload Debug Asset
+#        uses: actions/upload-release-asset@v1
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        with:
+#          upload_url: ${{ steps.create_release.outputs.upload_url }}
+#          asset_path: ${{ github.workspace }}\Debug.zip
+#          asset_name: Debug.zip
+#          asset_content_type: application/zip
+#
+      - name: Upload ESOAQR Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}\ESOAQR.zip
+          asset_name: ESOAQR.zip
+          asset_content_type: application/zip
+
+      - name: Upload FishingStateMachine Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}\FishingStateMachine.zip
+          asset_name: FishingStateMachine.zip
+          asset_content_type: application/zip
